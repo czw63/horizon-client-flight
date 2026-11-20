@@ -30,6 +30,8 @@ pub struct ProbeMove {
     pub origin: [f64; 3],
     pub marker_pitch: f32,
     pub target: [f64; 3],
+    pub sequence: i32,
+    pub tick: i32,
 }
 
 /// No target is invented when the caller cannot perform Java's collision queries.
@@ -193,6 +195,8 @@ impl Probe {
             origin: player.position,
             marker_pitch: marker,
             target,
+            sequence: self.sequence,
+            tick: player.tick,
         })
     }
 
@@ -337,6 +341,8 @@ mod tests {
         assert!(probe.expected_position.is_none());
         let request = arm(&mut probe, 2);
         assert_eq!(request.marker_pitch.to_bits(), 30.0_f32.to_bits() + 3);
+        assert_eq!(request.sequence, 1);
+        assert_eq!(request.tick, 2);
     }
 
     #[test]
@@ -406,6 +412,8 @@ mod tests {
         probe.last_probe_tick = i32::MAX - 2;
         let request = arm(&mut probe, i32::MAX);
         assert_eq!(probe.sequence, i32::MIN);
+        assert_eq!(request.sequence, i32::MIN);
+        assert_eq!(request.tick, i32::MAX);
         assert_eq!(request.marker_pitch.to_bits(), 30.0_f32.to_bits() + 2);
         assert!(probe.tick(Some(player(i32::MIN)), Some([0.0; 3])).is_none());
         probe.tick(Some(player(i32::MIN + 39)), None);

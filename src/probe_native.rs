@@ -31,6 +31,34 @@ fn vec(at: [f64; 3]) -> Vec3 {
     Vec3::new(at[0], at[1], at[2])
 }
 
+fn diagnostic(level: log::Level, message: std::fmt::Arguments<'_>) {
+    if log::log_enabled!(target: "client_flight", level) {
+        log::log!(target: "client_flight", level, "[client_flight] {message}");
+    } else {
+        eprintln!("[client_flight] {level} {message}");
+    }
+}
+
+/// Validate the entire batch before sending even its first packet or TickEnd.
+pub fn finite_movement_batch(group: &str, tick: i32, fields: &[(&str, f64)]) -> bool {
+    let mut valid = true;
+    for &(field, value) in fields {
+        if !value.is_finite() {
+            valid = false;
+            diagnostic(
+                log::Level::Warn,
+                format_args!(
+                    "drop movement batch group={group} tick={tick} field={field} value={value:?}"
+                ),
+            );
+        }
+    }
+    if !valid {
+        correction::clear();
+    }
+    valid
+}
+
 fn collision_target(game: &Game<'_>) -> Option<[f64; 3]> {
     let player = game.player.as_ref()?;
     let feet = player.position;
@@ -146,11 +174,53 @@ pub fn tick(game: &mut Game<'_>) {
             && !p.fluids.was_touching_water
             && !p.is_in_lava(),
     });
-    let Some(request) = correction::tick_with_target(player, || collision_target(game)) else {
+    let Some(request) = correction::tick_with_target(player, || {
+        let target = collision_target(game);
+        if target.is_none() {
+            diagnostic(
+                log::Level::Debug,
+                format_args!(
+                    "probe no collision target tick={:?}",
+                    player.map(|p| p.tick)
+                ),
+            );
+        }
+        target
+    }) else {
         return;
     };
+    if !finite_movement_batch(
+        "probe",
+        request.tick,
+        &[
+            ("origin.x", request.origin[0]),
+            ("origin.y", request.origin[1]),
+            ("origin.z", request.origin[2]),
+            ("target.x", request.target[0]),
+            ("target.y", request.target[1]),
+            ("target.z", request.target[2]),
+            ("marker_pitch", f64::from(request.marker_pitch)),
+            ("game.yaw", f64::from(game.yaw)),
+        ],
+    ) {
+        return;
+    }
     PROBE_PLAYER.with(|owner| *owner.borrow_mut() = identity);
-    let flags = u8::from(game.player.as_ref().is_some_and(|p| p.collision.horizontal)) << 1;
+    let flags = game.player.as_ref().map_or(0, |p| {
+        u8::from(p.ground.on_ground) | (u8::from(p.collision.horizontal) << 1)
+    });
+    diagnostic(
+        log::Level::Info,
+        format_args!(
+            "probe send origin={:?} target={:?} marker_pitch={:?} sequence={} tick={} yaw={:?} flags={flags:#04x}",
+            request.origin,
+            request.target,
+            request.marker_pitch,
+            request.sequence,
+            request.tick,
+            game.yaw,
+        ),
+    );
     let [x, y, z] = request.origin;
     game.send(S::MovePlayerPosRot(play::MovePlayerPosRot {
         x,

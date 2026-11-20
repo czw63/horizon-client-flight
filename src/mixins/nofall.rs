@@ -26,8 +26,21 @@ fn prepare_safe_landing(game: &mut Game<'_>) {
         return;
     }
     let (x, y, z) = (p.position.x, p.position.y, p.position.z);
+    let raised_y = y + 0.01;
+    if !crate::game::remote::fnr_probe::finite_movement_batch(
+        "nofall",
+        p.health.tick_count,
+        &[
+            ("origin.x", x),
+            ("origin.y", y),
+            ("origin.z", z),
+            ("raised.y", raised_y),
+        ],
+    ) {
+        return;
+    }
     let collision = u8::from(p.collision.horizontal) << 1;
-    for (y, on_ground) in [(y, false), (y + 0.01, false), (y, true)] {
+    for (y, on_ground) in [(y, false), (raised_y, false), (y, true)] {
         game.send(S::MovePlayerPos(play::MovePlayerPos {
             x,
             y,
