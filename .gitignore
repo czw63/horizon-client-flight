@@ -6,3 +6,5 @@ PLAN.md
 IMPLEMENT*.md
 MIXIN*.md
 docs/source/
+tests/
+scripts/
