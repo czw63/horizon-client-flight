@@ -109,12 +109,18 @@ fn overwrite_remote_teleport(game: &mut Game<'_>, p: &play::PlayerPosition) -> R
     if !game.replay.playing() {
         game.previous_position = position;
     }
-    game.yaw = yaw;
-    game.pitch = pitch;
+    // A probe hit keeps the player's own look: the server's angles are the ones it remembered,
+    // and applying them snaps the view back every time the probe fires.
+    if !hit {
+        game.yaw = yaw;
+        game.pitch = pitch;
+    }
     // setValuesFromPositionPacket: setOldPosAndRot gives xRotO the same
     // change, so a relative pitch keeps the model's ease and an absolute
     // one snaps it.
-    if let Some(m) = game.player_model.as_mut() {
+    if !hit
+        && let Some(m) = game.player_model.as_mut()
+    {
         m.previous_head_pitch =
             position_packet_pitch(m.previous_head_pitch, p.pitch, relative_pitch);
         m.head_pitch = pitch;
@@ -126,20 +132,36 @@ fn overwrite_remote_teleport(game: &mut Game<'_>, p: &play::PlayerPosition) -> R
         crate::game::remote::fnr_probe::diagnostic(
             log::Level::Info,
             format_args!(
-                "ack teleport id={} with pos={:?} yaw={:?} pitch={:?}",
-                p.teleport, position, game.yaw, game.pitch,
+                "ack teleport id={} server_pos={:?} local_pos={:?} ack_yaw={:?} ack_pitch={:?}",
+                p.teleport, corrected_position, current, game.yaw, game.pitch,
             ),
         );
     }
     // handleMovePlayer does not change LocalPlayer.sendPosition's baseline:
     // the next tick must still report the corrected state.
+    //
+    // ServerboundAcceptTeleportationPacket feeds the reported position straight back into
+    // ServerGamePacketListenerImpl.handlePlayerPositionChange, so a probe hit has to report the
+    // position the server asked for, not the one the player kept. Reporting the airborne
+    // position re-triggers the movement check and the server sends another teleport at once.
+    let (ack_x, ack_y, ack_z, ack_yaw, ack_pitch) = if hit {
+        (
+            corrected_position[0],
+            corrected_position[1],
+            corrected_position[2],
+            game.yaw,
+            game.pitch,
+        )
+    } else {
+        (position.x, position.y, position.z, yaw, pitch)
+    };
     game.send(S::AcceptTeleportation(play::AcceptTeleportation {
         id: p.teleport,
-        x: position.x,
-        y: position.y,
-        z: position.z,
-        yaw,
-        pitch,
+        x: ack_x,
+        y: ack_y,
+        z: ack_z,
+        yaw: ack_yaw,
+        pitch: ack_pitch,
     }));
     // Then MultiPlayerGameMode.stopDestroyBlock: a dig the teleport (an
     // anticheat's setback, a /tp) interrupts is aborted on the wire, and the
