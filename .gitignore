@@ -1,0 +1,8 @@
+/.horizon/
+/target/
+AGENTS.md
+BRIEF-*.md
+PLAN.md
+IMPLEMENT*.md
+MIXIN*.md
+docs/source/

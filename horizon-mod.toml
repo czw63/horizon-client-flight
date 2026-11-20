@@ -1,0 +1,63 @@
+id = "client_flight"
+name = "Client Flight"
+version = "0.1.0"
+description = "Client-side flight, elytra boost and no-fall for Horizon, ported from Client-Flight-Mod."
+authors = ["czw63"]
+api = "0.2"
+side = "client"
+capabilities = ["registries"]
+
+[native]
+game = "26.3"
+horizon = "5ef7734fdd854add5efd6817178be3c988d8d050"
+mixins = "e59da9094f0c2fdda6c627fe9eff22dec6a906f0"
+
+[[native.mixin]]
+id = "abilities"
+target = "horizon_client::game::remote::abilities::Game<'_>::apply_remote_abilities"
+kind = "OVERWRITE"
+helper = "src/mixins/abilities.rs"
+bindings = [{ name = "game", ty = "&mut Game<'_>", value = "&mut *self" }]
+
+[[native.mixin]]
+id = "nofall"
+target = "horizon_client::game::remote::Game<'_>::remote_send_state"
+kind = "HEAD"
+cancellable = false
+helper = "src/mixins/nofall.rs"
+bindings = [{ name = "game", ty = "&mut Game<'_>", value = "&mut *self" }]
+
+[[native.mixin]]
+id = "correction"
+target = "horizon_client::game::remote::Game<'_>::remote_teleport"
+kind = "HEAD"
+cancellable = true
+helper = "src/mixins/correction.rs"
+bindings = [
+    { name = "game", ty = "&mut Game<'_>", value = "&mut *self" },
+    { name = "packet", ty = "&play::PlayerPosition", value = "p" },
+]
+
+[[native.mixin]]
+id = "correction_sent_move"
+target = "horizon_client::game::remote::Game<'_>::send_play"
+kind = "BEFORE_CALL"
+selector = "r.session.send"
+require = 1
+ordinal = 0
+helper = "src/mixins/correction_sent_move.rs"
+bindings = [
+    { name = "game", ty = "&Game<'_>", value = "&*self" },
+    { name = "packet", ty = "&S", value = "&packet" },
+]
+
+[[native.mixin]]
+id = "flight_velocity"
+target = "horizon_client::game::remote::Game<'_>::apply_packet"
+kind = "HEAD"
+cancellable = true
+helper = "src/mixins/flight_velocity.rs"
+bindings = [
+    { name = "game", ty = "&mut Game<'_>", value = "&mut *self" },
+    { name = "packet", ty = "&C", value = "&packet" },
+]
