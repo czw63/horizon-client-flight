@@ -138,5 +138,17 @@ mod tests {
         reset();
         assert!(!observe(3, true, true, true));
         set_enabled(false);
+        assert!(
+            crate::commands::run("cfly nofalltoggle")
+                .unwrap()
+                .contains("ON")
+        );
+        assert!(is_enabled());
+        assert!(
+            crate::commands::run("cfly nofalltoggle")
+                .unwrap()
+                .contains("OFF")
+        );
+        assert!(!is_enabled());
     }
 }

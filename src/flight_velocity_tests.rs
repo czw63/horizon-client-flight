@@ -3,6 +3,20 @@ use std::ops::ControlFlow;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+mod client_flight {
+    pub mod commands {
+        use std::cell::Cell;
+
+        thread_local! {
+            pub static ENABLED: Cell<bool> = const { Cell::new(true) };
+        }
+
+        pub fn flight_enabled() -> bool {
+            ENABLED.with(Cell::get)
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Vec3 {
     x: f64,
@@ -92,6 +106,17 @@ fn packet(id: i32, y: f64) -> C {
         id,
         velocity: [1.25, y, -2.5],
     })
+}
+
+#[test]
+fn disabled_mod_does_not_change_server_granted_flight_velocity() {
+    client_flight::commands::ENABLED.with(|enabled| enabled.set(false));
+    let mut game = game();
+    let before = game.player.as_ref().unwrap().velocity;
+    assert!(keep_flight_velocity(&mut game, &packet(7, -0.8)).is_continue());
+    assert_eq!(game.player.unwrap().velocity, before);
+    assert_eq!(game.observations, 0);
+    client_flight::commands::ENABLED.with(|enabled| enabled.set(true));
 }
 
 #[test]

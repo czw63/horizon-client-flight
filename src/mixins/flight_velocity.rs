@@ -1,4 +1,7 @@
 fn keep_flight_velocity(game: &mut Game<'_>, packet: &C) -> ::core::ops::ControlFlow<Result<()>> {
+    if !client_flight::commands::flight_enabled() {
+        return ::core::ops::ControlFlow::Continue(());
+    }
     let C::SetEntityMotion(p) = packet else {
         return ::core::ops::ControlFlow::Continue(());
     };

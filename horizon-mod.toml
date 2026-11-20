@@ -71,7 +71,11 @@ source = "src/probe_native.rs"
 [[native.mixin]]
 id = "probe_tick"
 target = "horizon_client::game::remote::Game<'_>::tick_local_player"
-kind = "HEAD"
+kind = "AFTER_CALL"
+selector = "self.remote_send_state"
+result = "()"
+require = 1
+ordinal = 0
 cancellable = false
 helper = "src/mixins/probe_tick.rs"
 bindings = [{ name = "game", ty = "&mut Game<'_>", value = "&mut *self" }]

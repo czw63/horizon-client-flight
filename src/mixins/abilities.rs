@@ -7,6 +7,6 @@ fn apply_remote_abilities_keep_flight(game: &mut Game<'_>) {
     };
     player.invulnerable = a.flags & 1 != 0;
     player.flying = a.flags & 2 != 0;
-    player.may_fly = true;
+    player.may_fly = a.flags & 4 != 0 || client_flight::commands::flight_enabled();
     player.flying_speed = a.flying_speed;
 }

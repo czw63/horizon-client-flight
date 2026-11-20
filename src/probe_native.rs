@@ -103,20 +103,31 @@ fn collision_target(game: &Game<'_>) -> Option<[f64; 3]> {
 pub fn tick(game: &mut Game<'_>) {
     check_player(game);
     let identity = game.local_player();
+    let enabled = client_flight::commands::flight_enabled();
+    let server_may_fly = game
+        .remote
+        .as_ref()
+        .and_then(|r| r.abilities.as_ref())
+        .is_some_and(|a| a.flags & 4 != 0);
     let client_owned = FLIGHT_OWNER.with(|owner| {
         let mut owner = owner.borrow_mut();
-        if identity.is_none() || game.player.as_ref().is_none_or(|p| !p.may_fly) {
+        if identity.is_none() || *owner != identity {
             *owner = None;
-        } else if identity.is_some()
-            && game
-                .remote
-                .as_ref()
-                .is_some_and(|r| r.abilities.as_ref().is_some_and(|a| a.flags & 4 == 0))
-        {
-            // Existing abilities forces may_fly when the server did not grant it.
-            *owner = identity;
         }
-        identity.is_some() && *owner == identity
+        if let Some(player) = game.player.as_mut().filter(|_| game.remote.is_some()) {
+            if enabled {
+                player.may_fly = true;
+                *owner = if server_may_fly { None } else { identity };
+            } else if owner.is_some() {
+                // Revoke only our grant, never creative/server flight permission.
+                player.may_fly = server_may_fly;
+                if !server_may_fly {
+                    player.flying = false;
+                }
+                *owner = None;
+            }
+        }
+        enabled && identity.is_some() && *owner == identity
     });
     let player = game.player.as_ref().map(|p| correction::Player {
         tick: p.health.tick_count,
@@ -157,14 +168,16 @@ pub fn tick(game: &mut Game<'_>) {
 
 pub fn check_player(game: &Game<'_>) {
     if correction::is_awaiting_correction()
-        && PROBE_PLAYER.with(|owner| *owner.borrow() != game.local_player())
+        && (!client_flight::commands::flight_enabled()
+            || PROBE_PLAYER.with(|owner| *owner.borrow() != game.local_player()))
     {
         correction::clear();
     }
 }
 
 pub fn defer_use(game: &Game<'_>, attempt: mod_api::InteractionAttempt) -> bool {
-    if game.player.is_none()
+    if !client_flight::commands::flight_enabled()
+        || game.player.is_none()
         || game.remote.as_ref().is_none_or(|r| r.is_destroying)
         || game.hands_busy()
         || game.entity_targeted()
