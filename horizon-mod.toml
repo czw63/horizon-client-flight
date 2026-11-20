@@ -61,3 +61,39 @@ bindings = [
     { name = "game", ty = "&mut Game<'_>", value = "&mut *self" },
     { name = "packet", ty = "&C", value = "&packet" },
 ]
+
+[[native.module]]
+id = "probe_runtime"
+file = "crates/horizon-client/src/game/network/remote/mod.rs"
+name = "fnr_probe"
+source = "src/probe_native.rs"
+
+[[native.mixin]]
+id = "probe_tick"
+target = "horizon_client::game::remote::Game<'_>::tick_local_player"
+kind = "HEAD"
+cancellable = false
+helper = "src/mixins/probe_tick.rs"
+bindings = [{ name = "game", ty = "&mut Game<'_>", value = "&mut *self" }]
+
+[[native.mixin]]
+id = "probe_interaction"
+target = "horizon_client::game::remote::interaction_actions::Game<'_>::remote_use"
+kind = "HEAD"
+cancellable = true
+helper = "src/mixins/probe_interaction.rs"
+bindings = [
+    { name = "game", ty = "&mut Game<'_>", value = "&mut *self" },
+    { name = "attempt", ty = "mod_api::InteractionAttempt", value = "attempt" },
+]
+
+[[native.mixin]]
+id = "probe_replay"
+target = "horizon_client::game::remote::Game<'_>::apply_packet"
+kind = "HEAD"
+cancellable = true
+helper = "src/mixins/probe_replay.rs"
+bindings = [
+    { name = "game", ty = "&mut Game<'_>", value = "&mut *self" },
+    { name = "packet", ty = "&C", value = "&packet" },
+]

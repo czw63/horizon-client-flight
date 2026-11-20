@@ -7,6 +7,7 @@ use mod_api::Hooks;
 
 pub mod correction;
 pub mod nofall;
+pub mod probe_geometry;
 
 #[derive(Default)]
 pub struct Mod;

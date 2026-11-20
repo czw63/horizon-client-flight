@@ -1,4 +1,4 @@
-//! CollisionProbe state. Geometry selection and input interception are not wired yet.
+//! Java CollisionProbe state; native adapters supply geometry and replay input after the ACK.
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
@@ -24,7 +24,7 @@ pub struct Player {
     pub client_flying: bool,
 }
 
-/// A future caller sends PosRot(origin, marker_pitch), TickEnd, Pos(target), TickEnd.
+/// The native tick sends PosRot(origin, marker_pitch), TickEnd, Pos(target), TickEnd.
 #[derive(Clone, Copy, Debug)]
 pub struct ProbeMove {
     pub origin: [f64; 3],
@@ -34,10 +34,18 @@ pub struct ProbeMove {
 
 /// No target is invented when the caller cannot perform Java's collision queries.
 pub fn tick(player: Option<Player>, collision_target: Option<[f64; 3]>) -> Option<ProbeMove> {
+    tick_with_target(player, || collision_target)
+}
+
+/// Geometry is queried only after Java's eligibility, timeout and throttle gates.
+pub fn tick_with_target(
+    player: Option<Player>,
+    collision_target: impl FnOnce() -> Option<[f64; 3]>,
+) -> Option<ProbeMove> {
     PROBE
         .lock()
         .unwrap_or_else(|error| error.into_inner())
-        .tick(player, collision_target)
+        .tick_with_target(player, collision_target)
 }
 
 pub fn is_awaiting_correction() -> bool {
@@ -136,7 +144,16 @@ impl Probe {
         self.pending_interaction = None;
     }
 
+    #[cfg(test)]
     fn tick(&mut self, player: Option<Player>, target: Option<[f64; 3]>) -> Option<ProbeMove> {
+        self.tick_with_target(player, || target)
+    }
+
+    fn tick_with_target(
+        &mut self,
+        player: Option<Player>,
+        target: impl FnOnce() -> Option<[f64; 3]>,
+    ) -> Option<ProbeMove> {
         let Some(player) = player.filter(|p| p.client_flying) else {
             self.clear();
             self.last_probe_tick = -100;
@@ -153,7 +170,7 @@ impl Probe {
         {
             return None;
         }
-        let target = target?;
+        let target = target()?;
         self.expected_position = Some(player.position);
         self.expected_tick = player.tick;
         self.sequence = self.sequence.wrapping_add(1);
@@ -320,6 +337,52 @@ mod tests {
         assert!(probe.expected_position.is_none());
         let request = arm(&mut probe, 2);
         assert_eq!(request.marker_pitch.to_bits(), 30.0_f32.to_bits() + 3);
+    }
+
+    #[test]
+    fn geometry_runs_only_after_java_tick_gates() {
+        let mut probe = Probe::new();
+        let unexpected = || -> Option<[f64; 3]> { panic!("geometry ran before its gate") };
+        assert!(probe.tick_with_target(None, unexpected).is_none());
+        assert!(
+            probe
+                .tick_with_target(
+                    Some(Player {
+                        client_flying: false,
+                        ..player(1)
+                    }),
+                    unexpected
+                )
+                .is_none()
+        );
+        arm(&mut probe, 1);
+        probe.defer_interaction(Box::new(|| panic!("expired interaction")));
+        assert!(
+            probe
+                .tick_with_target(Some(player(41)), unexpected)
+                .is_none()
+        );
+        assert!(probe.expected_position.is_some());
+        assert!(
+            probe
+                .tick_with_target(Some(player(42)), unexpected)
+                .is_none()
+        );
+        assert!(probe.expected_position.is_none());
+        assert!(probe.pending_interaction.is_none());
+        arm(&mut probe, 43);
+        probe.clear();
+        assert!(
+            probe
+                .tick_with_target(Some(player(44)), unexpected)
+                .is_none()
+        );
+        probe.expected_tick = 45;
+        assert!(
+            probe
+                .tick_with_target(Some(player(46)), unexpected)
+                .is_none()
+        );
     }
 
     #[test]
