@@ -247,6 +247,11 @@ pub fn tick(game: &mut Game<'_>) {
         );
     }
     let [x, y, z] = request.origin;
+    // ServerGamePacketListenerImpl.handleMovePlayer disconnects with
+    // `invalid_player_movement` when a second packet carrying a position arrives in the same
+    // server tick. Horizon never sends ClientTickEnd, so the server's `receivedPositionThisTick`
+    // is still set from the normal move packet this tick; one here hands the probe a fresh slot.
+    game.send(S::ClientTickEnd(horizon_protocol::packets::Empty));
     game.send(S::MovePlayerPosRot(play::MovePlayerPosRot {
         x,
         y,

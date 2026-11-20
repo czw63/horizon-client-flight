@@ -28,14 +28,13 @@ helper = "src/mixins/nofall.rs"
 bindings = [{ name = "game", ty = "&mut Game<'_>", value = "&mut *self" }]
 
 [[native.mixin]]
-id = "correction"
+id = "remote_teleport"
 target = "horizon_client::game::remote::Game<'_>::remote_teleport"
-kind = "HEAD"
-cancellable = true
-helper = "src/mixins/correction.rs"
+kind = "OVERWRITE"
+helper = "src/mixins/remote_teleport.rs"
 bindings = [
     { name = "game", ty = "&mut Game<'_>", value = "&mut *self" },
-    { name = "packet", ty = "&play::PlayerPosition", value = "p" },
+    { name = "p", ty = "&play::PlayerPosition", value = "p" },
 ]
 
 [[native.mixin]]
