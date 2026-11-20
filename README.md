@@ -1,7 +1,9 @@
 # Client Flight — Horizon 版
 
 Minecraft 26.3 的 [Horizon](https://github.com/horizon-rust/horizon) 客户端 mod。
-移植自 [Client-Flight-Mod](https://github.com/ReallyChooseC/Client-Flight-Mod)（Fabric / NeoForge 版）。
+是 [ReallyChooseC](https://github.com/ReallyChooseC) 的
+[Client-Flight-Mod](https://github.com/ReallyChooseC/Client-Flight-Mod)（Fabric / NeoForge 版）
+在 Horizon 上的移植，机制全部来自原作者，详见文末「致谢」。
 
 ## 装
 
@@ -77,6 +79,30 @@ Horizon 每天出 nightly。游戏 build 不匹配时 launcher 会报错，需�
 Horizon 的 fair-play 政策（`docs/pvp.md`）禁止客户端飞行、nofall 这类功能。
 这个 mod 只适合自建服务器自用，别指望进公开 mod registry。
 
+## 致谢
+
+这个 mod 不是我设计出来的，是 [ReallyChooseC](https://github.com/ReallyChooseC) 的
+[Client-Flight-Mod](https://github.com/ReallyChooseC/Client-Flight-Mod) 的 Horizon 移植版。
+
+整套机制是原作者的原创设计，我做的只是把它逐条翻译成 Horizon 的 Rust / native mixin：
+
+- **CollisionProbe 的闭环**：主动探测碰撞目标、伪造非法位置勾出服务端的传送包、
+  用标记位认出自己勾的那个包、回带位置的 `AcceptTeleportation` 把空中位置变成服务端的合法基准
+- **marker pitch 指纹**：按 `sequence & 63` 在 ulp 级别挪动 pitch，让每次探测的包都能被唯一识别
+- **免摔的三段包**：`(y,false)` → `(y+0.01,false)` → `(y,true)`，用一次微小上移重置服务端的下落距离
+- **受伤时保留速度**：挡住服务端重发的、来自「未授予飞行」状态的重力
+- **交互延迟**：等传送确认的空窗期里把方块交互推迟，确认后再补发
+
+原项目 MIT 许可，版权归 ReallyChooseC。这个仓库同样以 MIT 发布，`LICENSE` 里保留了原版权声明。
+
+原本是 Java / Fabric + NeoForge 的 mixin 实现，那边有完整的 `/cfly` 命令、配置、鞘翅加速，
+功能比这里全得多。如果你想在 Fabric 上玩，直接用原版：
+https://github.com/ReallyChooseC/Client-Flight-Mod
+
+Horizon 本身的移植思路参考了它的源码和架构文档：
+https://github.com/horizon-rust/horizon
+
 ## License
 
-MIT，同上游 mod。
+MIT。原版 Client-Flight-Mod 的版权归 ReallyChooseC（2025），这个 Horizon 移植部分的版权归懿逝（2026），
+`LICENSE` 里两行都保留了。
