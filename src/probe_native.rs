@@ -8,7 +8,7 @@ use horizon_world::collision_context::{
     CollisionContext, CollisionEntity, CollisionItem, EntityContextKind,
 };
 use horizon_world::entity_obstruction::EntityIdentity;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 thread_local! {
     // The callback owns the pending snapshot. Only a matching correction moves it here,
@@ -16,6 +16,7 @@ thread_local! {
     static READY: RefCell<Option<DeferredUse>> = const { RefCell::new(None) };
     static FLIGHT_OWNER: RefCell<Option<mod_api::PlayerRef>> = const { RefCell::new(None) };
     static PROBE_PLAYER: RefCell<Option<mod_api::PlayerRef>> = const { RefCell::new(None) };
+    static LOCAL_STATE_NOT_FINITE: Cell<bool> = const { Cell::new(false) };
 }
 
 struct DeferredUse {
@@ -31,7 +32,7 @@ fn vec(at: [f64; 3]) -> Vec3 {
     Vec3::new(at[0], at[1], at[2])
 }
 
-fn diagnostic(level: log::Level, message: std::fmt::Arguments<'_>) {
+pub fn diagnostic(level: log::Level, message: std::fmt::Arguments<'_>) {
     if log::log_enabled!(target: "client_flight", level) {
         log::log!(target: "client_flight", level, "[client_flight] {message}");
     } else {
@@ -129,6 +130,24 @@ fn collision_target(game: &Game<'_>) -> Option<[f64; 3]> {
 }
 
 pub fn tick(game: &mut Game<'_>) {
+    let not_finite = game.player.as_ref().is_some_and(|player| {
+        !player.position.components().into_iter().all(f64::is_finite)
+            || !game.yaw.is_finite()
+            || !game.pitch.is_finite()
+            || !player.velocity.components().into_iter().all(f64::is_finite)
+    });
+    let first_not_finite = LOCAL_STATE_NOT_FINITE.with(|state| !state.replace(not_finite) && not_finite);
+    if first_not_finite {
+        if let Some(player) = game.player.as_ref() {
+            diagnostic(
+                log::Level::Warn,
+                format_args!(
+                    "local state not finite: pos={:?} yaw={:?} pitch={:?} vel={:?}",
+                    player.position, game.yaw, game.pitch, player.velocity,
+                ),
+            );
+        }
+    }
     check_player(game);
     let identity = game.local_player();
     let enabled = client_flight::commands::flight_enabled();
@@ -209,18 +228,24 @@ pub fn tick(game: &mut Game<'_>) {
     let flags = game.player.as_ref().map_or(0, |p| {
         u8::from(p.ground.on_ground) | (u8::from(p.collision.horizontal) << 1)
     });
-    diagnostic(
-        log::Level::Info,
-        format_args!(
-            "probe send origin={:?} target={:?} marker_pitch={:?} sequence={} tick={} yaw={:?} flags={flags:#04x}",
-            request.origin,
-            request.target,
-            request.marker_pitch,
-            request.sequence,
-            request.tick,
-            game.yaw,
-        ),
-    );
+    if let Some(player) = game.player.as_ref() {
+        diagnostic(
+            log::Level::Info,
+            format_args!(
+                "probe send origin={:?} target={:?} marker_pitch={:?} sequence={} tick={} yaw={:?} flags={flags:#04x} pos={:?} yaw={:?} pitch={:?} vel={:?}",
+                request.origin,
+                request.target,
+                request.marker_pitch,
+                request.sequence,
+                request.tick,
+                game.yaw,
+                player.position,
+                game.yaw,
+                game.pitch,
+                player.velocity,
+            ),
+        );
+    }
     let [x, y, z] = request.origin;
     game.send(S::MovePlayerPosRot(play::MovePlayerPosRot {
         x,
