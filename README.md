@@ -39,6 +39,9 @@ launcher 会取本仓库源码，用它自带的 Rust 工具链编一遍（只�
   Horizon 里这个函数没标 `replaceable`，要做得整个重写，这版没做。
 - **没有 `/cfly` 命令、没有 Mods 配置页、没有快捷键。** 目前只有 `nofall` 有个开关
   （`client_flight::nofall::set_enabled`），默认关，暂时没有游戏内入口。
+- **`flight_velocity` 的飞行判据比原版宽。** 它只看本地 `may_fly && flying && hurt_time > 0 && 包里的 y < 0`，
+  没有搬 Java `isClientFlying` 里那套飞行归属追踪和创造/旁观/落地/乘坐/鞘翅/流体/攀爬的排除条件。
+  正常飞行场景下够用，但极端组合下可能比原版多管一点事。
 - **未做游戏内实测。** 只验证了编译（`horizon-launcher native-build` → `Build completed.`）
   和 crate 内的单元测试。上服务端前请先在自建服里试。
 
